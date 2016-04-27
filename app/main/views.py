@@ -1,14 +1,24 @@
 from datetime import datetime
-from flask import render_template, session, redirect, url_for, current_app
+from flask import render_template, session, redirect, url_for, current_app,request
 from . import main
 from flask.ext.login import current_user
 from .. import db
 from flask.ext.login import login_required, current_user
 
-from .forms import NameForm, PostForm
+from .forms import  PostForm,PostFormWithAuthCode
 
 from ..models import User, Post, Permission
+from ..auth import conn
+from ..auth.views import limit_exceed
+#def limit_exceed(limited, times=3, time_long=60, inc=True):
 
+def form_choice(user_name, f, inc=True, times=3, time_long=30):
+    form = PostForm()
+    form_with_auth_code=PostFormWithAuthCode()
+    if f(user_name, inc=inc, time_long=time_long):
+        return form_with_auth_code
+    else:
+        return form
 
 # @main.route('/', methods=['GET', 'POST'])
 # def index():
@@ -34,10 +44,16 @@ from ..models import User, Post, Permission
 
 @main.route('/', methods=["GET", "POST"])
 def index():
-    form = PostForm()
-    if current_user.can(Permission.WRITE_POST) and form.validate_on_submit():
-        post = Post(body=form.body.data, author=current_user._get_current_object())
-        db.session.add(post)
-        return redirect(url_for(".index"))
+    # print(type(current_user._get_current_object()))
+    # if()
+    user_rep=str(current_user._get_current_object())
+    form = form_choice(user_rep,limit_exceed,False)
+    if current_user.can(Permission.WRITE_POST):
+        if form.validate_on_submit():
+        # print(current_user._get_current_object())
+            post = Post(body=form.body.data, author=current_user._get_current_object())
+            db.session.add(post)
+            form = form_choice(user_rep,limit_exceed,True)
+            return redirect(url_for(".index"))
     posts = Post.query.order_by(Post.timestamp.desc()).all()
     return render_template('index.html', form=form, posts=posts)
